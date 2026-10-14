@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>
+<title>Evolución sobre la Mesa</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Martian+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: pantalla completa de cámara o escena 3D; HUD flotante arriba (altímetro) y abajo (cartas). Tema único oscuro, porque va sobre video. */
+:root{
+  --ink:#0E1A14;          /* fondo, verde casi negro */
+  --panel:rgba(14,26,20,.82);
+  --line:rgba(226,236,228,.16);
+  --fg:#EEF3EC;
+  --muted:#A9B8AE;
+  --sel:#3D8BFD;          /* Selección */
+  --cx:#F28C28;           /* Cruza */
+  --mut:#D63CA8;          /* Mutación */
+  --peak:#F5C542;         /* mejor individuo */
+  --display:"Archivo",system-ui,sans-serif;
+  --mono:"Martian Mono",ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%;margin:0;background:var(--ink);color:var(--fg);font-family:var(--display);overflow:hidden}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible{outline:2px solid var(--peak);outline-offset:2px}
+
+#stage{position:fixed;inset:0}
+#stage a-scene{position:absolute;inset:0}
+
+/* Portada */
+#intro{position:fixed;inset:0;z-index:30;overflow-y:auto;background:
+  radial-gradient(120% 80% at 80% 10%,rgba(245,197,66,.10),transparent 60%),var(--ink);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:calc(28px + env(safe-area-inset-top,0px)) calc(28px + env(safe-area-inset-bottom,0px))}
+#intro .wrap{max-width:560px;margin:0 auto;display:grid;gap:22px}
+#intro canvas{width:100%;max-width:100%;aspect-ratio:1/1;border-radius:6px;display:block}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+h1{font-size:clamp(34px,9vw,54px);line-height:.95;margin:0;font-weight:800;font-stretch:72%;text-wrap:balance;letter-spacing:-.01em}
+h1 em{font-style:normal;color:var(--peak)}
+.lede{font-size:17px;line-height:1.5;color:var(--muted);margin:0;max-width:60ch}
+.steps{display:grid;gap:10px;margin:0;padding:0;list-style:none;counter-reset:s}
+.steps li{display:grid;grid-template-columns:28px 1fr;gap:10px;font-size:15px;line-height:1.45;counter-increment:s}
+.steps li::before{content:counter(s);font-family:var(--mono);font-size:12px;width:24px;height:24px;border:1px solid var(--line);border-radius:50%;display:grid;place-items:center;color:var(--peak)}
+.cta{display:grid;gap:10px}
+.btn{border:0;border-radius:999px;padding:15px 20px;font-weight:700;font-size:16px;font-stretch:90%}
+.btn.primary{background:var(--peak);color:var(--ink)}
+.btn.ghost{background:transparent;border:1px solid var(--line)}
+#camErr{font-size:14px;line-height:1.45;color:var(--fg);background:rgba(214,60,168,.14);border:1px solid rgba(214,60,168,.5);border-radius:8px;padding:12px 14px}
+
+/* HUD */
+.hud{position:fixed;left:0;right:0;z-index:20;pointer-events:none;
+  padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px))}
+.hud>*{pointer-events:auto}
+#top{top:0;padding-top:calc(10px + env(safe-area-inset-top,0px));display:flex;gap:8px;justify-content:space-between;align-items:flex-start}
+#bottom{bottom:0;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));display:grid;gap:8px}
+.gauge{background:var(--panel);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:10px;padding:8px 12px;display:grid;gap:2px;min-width:0}
+.gauge b{font-family:var(--mono);font-weight:600;font-size:20px;font-variant-numeric:tabular-nums}
+.gauge span{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.gauge.alt b{color:var(--peak)}
+#status{background:var(--panel);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:15px;line-height:1.4}
+#status small{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+.ops{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.op{border:1.5px solid var(--c);background:var(--panel);border-radius:10px;padding:9px 6px;display:grid;justify-items:center;gap:3px;font-weight:700;font-size:14px;font-stretch:85%;transition:background .2s,opacity .2s}
+.op i{font-style:normal;font-family:var(--mono);font-size:10px;font-weight:400;letter-spacing:.1em;color:var(--muted)}
+.op[aria-pressed="true"]{background:var(--c);color:#fff}
+.op[aria-pressed="true"] i{color:rgba(255,255,255,.85)}
+.op[aria-pressed="false"]{opacity:.62;border-style:dashed}
+.op.sel{--c:var(--sel)}.op.cx{--c:var(--cx)}.op.mut{--c:var(--mut)}
+.row{display:flex;gap:8px}
+.row .btn{flex:1;padding:11px 14px;font-size:14px;background:var(--panel);border:1px solid var(--line)}
+#search{position:fixed;z-index:19;left:50%;top:42%;transform:translate(-50%,-50%);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 16px;font-size:15px;text-align:center;max-width:calc(100% - 48px)}
+@media (prefers-reduced-motion:reduce){.op{transition:none}}
+</style>
+
+<div id="stage"></div>
+
+<section id="intro">
+  <div class="wrap">
+    <div class="eyebrow">Algoritmos evolutivos · demostración</div>
+    <h1>¿Cómo encuentra la evolución <em>la cima más alta</em>?</h1>
+    <canvas id="minimap" width="560" height="560" aria-label="Mapa topográfico del paisaje"></canvas>
+    <p class="lede">Treinta exploradores empiezan en una esquina del mapa. Nadie conoce el terreno. En cada generación los mejores dejan descendientes, que se mezclan y cambian un poco. Generación tras generación, la población sube.</p>
+    <ol class="steps">
+      <li>Pon el tablero sobre la mesa y apunta el celular al cuadro del centro. El mapa se levanta en 3D.</li>
+      <li>Coloca junto al tablero las cartas de <b>Selección</b>, <b>Cruza</b> y <b>Mutación</b>. Cada carta que la cámara ve se enciende.</li>
+      <li>Quita una carta y observa qué pasa con la población.</li>
+    </ol>
+    <div class="cta">
+      <button class="btn primary" id="goAR">Usar la cámara</button>
+      <button class="btn ghost" id="goDemo">Ver sin cámara</button>
+      <div id="camErr" hidden></div>
+    </div>
+  </div>
+</section>
+
+<div id="search" hidden>Apunta al cuadro del centro del tablero</div>
+
+<div class="hud" id="top" hidden>
+  <div class="gauge"><span>Generación</span><b id="gen">0</b></div>
+  <div class="gauge alt"><span>Récord de altura</span><b id="alt">0 m</b></div>
+</div>
+
+<div class="hud" id="bottom" hidden>
+  <div id="status"><small id="statusTag">Estado</small><span id="msg"></span></div>
+  <div class="ops">
+    <button class="op sel" id="op-sel" aria-pressed="true">Selección<i>los mejores</i></button>
+    <button class="op cx" id="op-cx" aria-pressed="true">Cruza<i>mezclar</i></button>
+    <button class="op mut" id="op-mut" aria-pressed="true">Mutación<i>cambiar</i></button>
+  </div>
+  <div class="row">
+    <button class="btn" id="reset">Reiniciar población</button>
+    <button class="btn" id="pause">Pausa</button>
+  </div>
+</div>
+
+<script>
+/* ------------ Paisaje: suma de montañas (mismo que el mapa impreso) ------------ */
+const PEAKS=[[0.80,0.78,1.00,0.12],[0.22,0.25,0.55,0.11],[0.78,0.22,0.62,0.10],[0.22,0.78,0.70,0.10],[0.52,0.12,0.42,0.08]];
+function f(u,v){let z=0.10*(u+v)/2;for(const[a,b,h,s]of PEAKS)z+=h*Math.exp(-((u-a)**2+(v-b)**2)/(2*s*s));return z}
+const TOP=f(0.80,0.78);                 // cima global
+const METERS=z=>Math.round(z*1000);
+const W=3.6, H=1.0;                      // tamaño del mapa en unidades de marcador (mapa 252 mm / marcador 70 mm)
+
+/* ------------ Algoritmo genético ------------ */
+const N=30;
+let rng=Math.random;
+function gauss(){let u=0,v=0;while(!u)u=rng();while(!v)v=rng();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
+const clamp=x=>Math.min(1,Math.max(0,x));
+const ops={sel:true,cx:true,mut:true};
+let pop=[],prev=[],gen=0,record=0,lastGen=0,paused=false,reached=false;
+function fitOf(p){return f(p.u,p.v)}
+function init(){
+  pop=Array.from({length:N},()=>({u:clamp(0.18+gauss()*0.04),v:clamp(0.20+gauss()*0.04)}));
+  prev=pop.map(p=>({...p}));gen=0;reached=false;record=Math.max(...pop.map(fitOf));lastGen=performance.now();updateHUD();
+}
+function step(){
+  const fit=pop.map(fitOf);
+  const bi=fit.indexOf(Math.max(...fit));
+  const pick=()=>{
+    if(ops.sel){let b=-1,bf=-1;for(let k=0;k<3;k++){const i=Math.floor(rng()*N);if(fit[i]>bf){bf=fit[i];b=i}}return pop[b]}
+    return pop[Math.floor(rng()*N)];
+  };
+  const next=ops.sel?[{...pop[bi]}]:[];
+  while(next.length<N){
+    const a=pick();let c;
+    if(ops.cx){const b=pick(),w=-0.25+rng()*1.5;c={u:w*a.u+(1-w)*b.u,v:w*a.v+(1-w)*b.v}}
+    else c={u:a.u,v:a.v};
+    if(ops.mut){c.u+=gauss()*0.06;c.v+=gauss()*0.06;if(rng()<0.15){c.u+=gauss()*0.25;c.v+=gauss()*0.25}}
+    next.push({u:clamp(c.u),v:clamp(c.v)});
+  }
+  prev=pop;pop=next;gen++;
+  record=Math.max(record,...pop.map(fitOf));
+  if(record>TOP*0.95)reached=true;
+  updateHUD();
+}
+
+/* ------------ HUD ------------ */
+const $=id=>document.getElementById(id);
+function message(){
+  const off=Object.keys(ops).filter(k=>!ops[k]);
+  if(off.length===3)return["Sin cartas","Ninguna pieza del algoritmo está activa. Coloca las cartas junto al tablero."];
+  if(!ops.sel)return["Sin selección","Nadie elige a los mejores, así que la población vaga por el mapa sin subir."];
+  if(!ops.mut&&reached)return["Sin mutación","Ya están en la cima, pero sin mutación dejaron de explorar: todos son casi iguales."];
+  if(!ops.mut)return["Sin mutación","Nadie prueba lugares nuevos. La población se queda en la primera montaña que encontró."];
+  if(reached&&!ops.cx)return["¡Cima alcanzada!","Llegaron a "+METERS(TOP)+" m solo con selección y mutación."];
+  if(reached)return["¡Cima alcanzada!","La población llegó a la montaña más alta, "+METERS(TOP)+" m. Prueba quitar la mutación y reiniciar."];
+  if(!ops.cx)return["Sin cruza","Siguen subiendo con mutaciones. En este mapa la cruza ayuda poco; en otros problemas es clave."];
+  return["Evolucionando","Los mejores dejan descendientes, que se mezclan y cambian un poco. Observa cómo suben."];
+}
+function updateHUD(){
+  $("gen").textContent=gen;
+  $("alt").textContent=METERS(record)+" m";
+  const[t,m]=message();$("statusTag").textContent=t;$("msg").textContent=m;
+  for(const k of Object.keys(ops))$("op-"+k).setAttribute("aria-pressed",String(ops[k]));
+}
+function setOp(k,val){if(ops[k]!==val){ops[k]=val;updateHUD()}}
+for(const k of["sel","cx","mut"])$("op-"+k).addEventListener("click",()=>setOp(k,!ops[k]));
+$("reset").addEventListener("click",init);
+$("pause").addEventListener("click",()=>{paused=!paused;$("pause").textContent=paused?"Continuar":"Pausa";lastGen=performance.now()});
+
+/* ------------ Colores hipsométricos (iguales al mapa impreso) ------------ */
+const STOPS=[[0,[46,94,62]],[0.25,[98,140,72]],[0.45,[190,184,104]],[0.65,[176,124,72]],[0.85,[132,92,70]],[1,[244,240,232]]];
+function tint(t){t=Math.min(1,Math.max(0,t));for(let i=1;i<STOPS.length;i++){const[a,ca]=STOPS[i-1],[b,cb]=STOPS[i];if(t<=b){const k=(t-a)/(b-a);return ca.map((c,j)=>(c+(cb[j]-c)*k)/255)}}return STOPS.at(-1)[1].map(c=>c/255)}
+
+/* Minimapa de la portada */
+(function(){const cv=$("minimap"),g=cv.getContext("2d"),S=cv.width,img=g.createImageData(S,S);
+  for(let y=0;y<S;y++)for(let x=0;x<S;x++){const z=f(x/S,y/S),c=tint(z/TOP),i=(y*S+x)*4;
+    const band=Math.abs((z*20)%1-0.5)>0.47?0.72:1;img.data[i]=c[0]*255*band;img.data[i+1]=c[1]*255*band;img.data[i+2]=c[2]*255*band;img.data[i+3]=255}
+  g.putImageData(img,0,0);
+  g.fillStyle="#fff";for(let k=0;k<N;k++){g.beginPath();g.arc((0.18+gauss()*0.04)*S,(0.20+gauss()*0.04)*S,5,0,7);g.fill()}
+  g.font="600 18px 'Martian Mono',monospace";g.fillStyle="#0E1A14";g.fillText("▲ "+METERS(TOP)+" m",0.80*S-46,0.78*S-40)})();
+
+/* ------------ Componentes A-Frame ------------ */
+function registerComponents(){
+  AFRAME.registerComponent("paisaje",{
+    init(){
+      const T=THREE,seg=110;
+      const geo=new T.PlaneGeometry(W,W,seg,seg);geo.rotateX(-Math.PI/2);
+      const pos=geo.attributes.position,col=new Float32Array(pos.count*3);
+      for(let i=0;i<pos.count;i++){const u=pos.getX(i)/W+0.5,v=pos.getZ(i)/W+0.5,z=f(u,v);pos.setY(i,z*H);
+        const c=tint(z/TOP);col[i*3]=c[0];col[i*3+1]=c[1];col[i*3+2]=c[2]}
+      geo.setAttribute("color",new T.BufferAttribute(col,3));geo.computeVertexNormals();
+      const land=new T.Mesh(geo,new T.MeshLambertMaterial({vertexColors:true,side:T.DoubleSide}));
+      this.el.object3D.add(land);
+      // bandera en la cima global
+      const flag=new T.Group(),pole=new T.Mesh(new T.CylinderGeometry(0.012,0.012,0.35,8),new T.MeshLambertMaterial({color:0xffffff}));
+      pole.position.y=0.175;const cloth=new T.Mesh(new T.PlaneGeometry(0.16,0.1),new T.MeshLambertMaterial({color:0xF5C542,side:T.DoubleSide}));
+      cloth.position.set(0.08,0.3,0);flag.add(pole,cloth);flag.position.set((0.80-0.5)*W,TOP*H,(0.78-0.5)*W);this.el.object3D.add(flag);
+      // individuos
+      const g=new T.SphereGeometry(0.055,14,10);
+      this.mats={n:new T.MeshLambertMaterial({color:0xffffff,emissive:0x222222}),b:new T.MeshLambertMaterial({color:0xF5C542,emissive:0x5a4300})};
+      this.dots=[];for(let i=0;i<N;i++){const m=new T.Mesh(g,this.mats.n);this.el.object3D.add(m);this.dots.push(m)}
+    },
+    tick(){
+      const now=performance.now();
+      if(!paused&&now-lastGen>650){lastGen=now;step()}
+      const k=Math.min(1,(now-lastGen)/420),e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
+      let bi=0,bf=-1;pop.forEach((p,i)=>{const v=fitOf(p);if(v>bf){bf=v;bi=i}});
+      for(let i=0;i<N;i++){const a=prev[i]||pop[i],b=pop[i],u=a.u+(b.u-a.u)*e,v=a.v+(b.v-a.v)*e,m=this.dots[i];
+        m.position.set((u-0.5)*W,f(u,v)*H+0.05,(v-0.5)*W);m.material=i===bi?this.mats.b:this.mats.n;m.scale.setScalar(i===bi?1.5:1)}
+    }
+  });
+  AFRAME.registerComponent("arrastre",{ // girar el mapa en modo sin cámara
+    init(){let x0=null,r0=0,auto=true;const o=this.el.object3D,c=document.getElementById("stage");
+      c.addEventListener("pointerdown",e=>{x0=e.clientX;r0=o.rotation.y;auto=false});
+      addEventListener("pointermove",e=>{if(x0!==null)o.rotation.y=r0+(e.clientX-x0)*0.008});
+      addEventListener("pointerup",()=>x0=null);
+      this.tick=()=>{if(auto&&!matchMedia("(prefers-reduced-motion: reduce)").matches)o.rotation.y+=0.0015}}
+  });
+}
+
+/* ------------ Escenas ------------ */
+function scriptsReady(){return new Promise((res,rej)=>{const t0=Date.now();(function w(){if(window.AFRAME&&window.THREE)return res();if(Date.now()-t0>15000)return rej();setTimeout(w,100)})()})}
+function showHUD(){$("intro").hidden=true;$("top").hidden=false;$("bottom").hidden=false}
+
+async function startDemo(){
+  await scriptsReady();registerComponents();init();showHUD();
+  $("stage").innerHTML=`<a-scene vr-mode-ui="enabled:false" renderer="antialias:true" background="color:#0E1A14" embedded>
+    <a-entity light="type:ambient;intensity:0.65"></a-entity>
+    <a-entity light="type:directional;intensity:0.8" position="-2 4 2"></a-entity>
+    <a-entity arrastre position="0 0.2 0"><a-entity paisaje></a-entity></a-entity>
+    <a-entity camera position="0 4.3 3.4" rotation="-50 0 0" look-controls="enabled:false" wasd-controls="enabled:false"></a-entity>
+  </a-scene>`;
+}
+
+const CARDS=[["sel","seleccion",0x3D8BFD],["cx","cruza",0xF28C28],["mut","mutacion",0xD63CA8]];
+async function startAR(){
+  const err=$("camErr");err.hidden=true;
+  try{const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});s.getTracks().forEach(t=>t.stop())}
+  catch(e){err.hidden=false;err.textContent="No se pudo abrir la cámara. Revisa que el navegador tenga permiso de cámara y que la página se abra con https. Mientras tanto puedes usar «Ver sin cámara».";return}
+  await scriptsReady();registerComponents();
+  for(const k of Object.keys(ops))ops[k]=false;   // las cartas encienden cada operador
+  init();showHUD();$("search").hidden=false;
+  const cards=CARDS.map(([k,n,c])=>`<a-marker type="pattern" url="patt/${n}.patt" id="mk-${k}" emitevents="true" smooth="true" smoothCount="5">
+      <a-cylinder radius="0.32" height="0.06" position="0 0.03 0" color="#${c.toString(16).padStart(6,"0")}" opacity="0.85"></a-cylinder></a-marker>`).join("");
+  $("stage").innerHTML=`<a-scene embedded vr-mode-ui="enabled:false" renderer="antialias:true;alpha:true;logarithmicDepthBuffer:true"
+      arjs="sourceType:webcam;debugUIEnabled:false;detectionMode:mono;patternRatio:0.5;maxDetectionRate:60;cameraParametersUrl:data/camera_para.dat">
+    <a-entity light="type:ambient;intensity:0.7"></a-entity>
+    <a-entity light="type:directional;intensity:0.7" position="-1 3 1"></a-entity>
+    <a-marker type="pattern" url="patt/tablero.patt" id="mk-tablero" emitevents="true" smooth="true" smoothCount="8" smoothTolerance="0.01" smoothThreshold="5">
+      <a-entity paisaje></a-entity>
+    </a-marker>${cards}
+    <a-entity camera></a-entity>
+  </a-scene>`;
+  const lost={};
+  const board=$("mk-tablero");
+  board.addEventListener("markerFound",()=>$("search").hidden=true);
+  board.addEventListener("markerLost",()=>$("search").hidden=false);
+  for(const[k]of CARDS){const m=$("mk-"+k);
+    m.addEventListener("markerFound",()=>{clearTimeout(lost[k]);setOp(k,true)});
+    m.addEventListener("markerLost",()=>{clearTimeout(lost[k]);lost[k]=setTimeout(()=>setOp(k,false),1500)})}
+}
+$("goDemo").addEventListener("click",startDemo);
+$("goAR").addEventListener("click",startAR);
+init();
+</script>
+<script src="lib/aframe-v1.3.0.min.js"></script>
+<script src="lib/aframe-ar.js"></script>
+
+</body></html>
