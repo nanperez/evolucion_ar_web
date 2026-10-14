@@ -10,7 +10,9 @@ Contenido de esta carpeta
 1. Publicarla (la cámara solo funciona en una dirección https)
    Opción rápida: entra a https://app.netlify.com/drop y arrastra esta carpeta completa.
    Opción GitHub Pages: sube la carpeta a un repositorio y activa Pages en Settings → Pages.
-   No funciona abriendo index.html directo desde el disco: el navegador bloquea la cámara.
+   Abriendo index.html directo desde el disco solo funciona el modo sin cámara.
+   Para la cámara en la computadora: en esta carpeta ejecuta  python -m http.server 8000
+   y abre http://localhost:8000
 
 2. Probarla
    Abre la dirección en el celular, toca «Usar la cámara» y acepta el permiso.
